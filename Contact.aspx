@@ -17,6 +17,11 @@
 
 .nav-item {
     margin-right: 15px;  
+    border:1px solid transparent;
+}
+.nav-item:hover {
+   border:1px solid black;
+   border-radius:4px;
 }
 
  .nav-link.active {
@@ -127,6 +132,17 @@
                 <i class="bi bi-search"></i> 
                 </asp:LinkButton>
             </li>
+             <li class="nav-item">
+                <div class="nav-link">
+                    <asp:FileUpload ID="fileUploadContacts" runat="server" CssClass="d-inline-block" />
+                    <asp:Button ID="btnImport" runat="server" Text="Import" CssClass="btn btn-light btn-sm ml-2" OnClick="btnImport_Click" />
+                </div>
+            </li>
+            <li class="nav-item">
+        <asp:LinkButton ID="btnExport" runat="server" CssClass="nav-link" OnClick="btnExport_Click">
+            <i class="bi bi-download"> </i> &nbsp Export Contacts
+        </asp:LinkButton>
+    </li>
             <li class="nav-item">
                 <asp:LinkButton ID="btnLogout" runat="server" CssClass="nav-link icon-button" OnClick="btnLogout_Click" >
                 <i class="bi bi-box-arrow-right icon-large"></i> <!-- Logout -->

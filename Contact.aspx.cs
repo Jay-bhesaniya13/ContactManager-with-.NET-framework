@@ -4,6 +4,7 @@ using System.Configuration;
 using System.Data;
 using System.Web.UI.WebControls;
 using System.Web.UI;
+using System.IO;
 
 namespace ContactManagement
 {
@@ -95,9 +96,8 @@ namespace ContactManagement
         {
             int contactId = Convert.ToInt32(gvContacts.DataKeys[e.RowIndex].Value);
             DeleteContact(contactId);
-            LoadContacts();  
+            LoadContacts();
         }
-
 
         protected void DeleteContact(int contactId)
         {
@@ -109,6 +109,150 @@ namespace ContactManagement
                 con.Open();
                 cmd.ExecuteNonQuery();
                 con.Close();
+            }
+        }
+
+        protected void btnExport_Click(object sender, EventArgs e)
+        {
+            DataTable dtContacts = GetContactsForExport();
+
+            if (dtContacts.Rows.Count > 0)
+            {
+                string csvData = ConvertToCSV(dtContacts);
+
+                Response.Clear();
+                Response.ContentType = "text/csv";
+                Response.AddHeader("content-disposition", "attachment;filename=Contacts.csv");
+                Response.Write(csvData);
+                Response.End();
+            }
+            else
+            {
+                lblMessage.Text = "No contacts available to export.";
+            }
+        }
+
+        private DataTable GetContactsForExport()
+        {
+            using (SqlConnection con = new SqlConnection(connectionString))
+            {
+                string query = "SELECT ContactName, ContactPhone FROM Contacts WHERE UserID = (SELECT UserID FROM Users WHERE Username = @Username)";
+                SqlCommand cmd = new SqlCommand(query, con);
+                cmd.Parameters.AddWithValue("@Username", Session["Username"]);
+
+                SqlDataAdapter da = new SqlDataAdapter(cmd);
+                DataTable dt = new DataTable();
+                da.Fill(dt);
+                return dt;
+            }
+        }
+
+        private string ConvertToCSV(DataTable dt)
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+            for (int i = 0; i < dt.Columns.Count; i++)
+            {
+                sb.Append(dt.Columns[i]);
+                if (i < dt.Columns.Count - 1)
+                    sb.Append(",");
+            }
+            sb.AppendLine();
+
+            foreach (DataRow row in dt.Rows)
+            {
+                for (int i = 0; i < dt.Columns.Count; i++)
+                {
+                    sb.Append(row[i].ToString());
+                    if (i < dt.Columns.Count - 1)
+                        sb.Append(",");
+                }
+                sb.AppendLine();
+            }
+            return sb.ToString();
+        }
+
+        // Import button click event
+        protected void btnImport_Click(object sender, EventArgs e)
+        {
+            if (fileUploadContacts.HasFile)
+            {
+                try
+                {
+                    StreamReader sr = new StreamReader(fileUploadContacts.PostedFile.InputStream);
+                    string csvData = sr.ReadToEnd();
+
+                    ImportContacts(csvData);
+
+                    LoadContacts();
+
+                    lblMessage.Text = "Contacts imported successfully.";
+                }
+                catch (Exception ex)
+                {
+                    lblMessage.Text = "Error: " + ex.Message;
+                }
+            }
+            else
+            {
+                lblMessage.Text = "Please select a CSV file to import.";
+            }
+        }
+
+        // Import contacts logic from CSV
+        private void ImportContacts(string csvData)
+        {
+            string username = Session["Username"]?.ToString();
+            if (string.IsNullOrEmpty(username))
+            {
+                lblMessage.Text = "User is not logged in.";
+                return;
+            }
+
+            using (SqlConnection con = new SqlConnection(connectionString))
+            {
+                SqlCommand getUserIdCmd = new SqlCommand("SELECT UserID FROM Users WHERE Username = @Username", con);
+                getUserIdCmd.Parameters.AddWithValue("@Username", username);
+                con.Open();
+                object userIdResult = getUserIdCmd.ExecuteScalar();
+                con.Close();
+
+                if (userIdResult == null || userIdResult == DBNull.Value)
+                {
+                    lblMessage.Text = "User not found.";
+                    return;
+                }
+
+                int userId = Convert.ToInt32(userIdResult);
+
+                using (StringReader reader = new StringReader(csvData))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        string[] fields = line.Split(',');
+                        if (fields.Length >= 2)
+                        {
+                            string contactName = fields[0].Trim();
+                            string contactPhone = fields[1].Trim();
+
+                            if (contactPhone.Length != 10)
+                            {
+                                continue;
+                            }
+
+                            using (SqlCommand cmd = new SqlCommand("INSERT INTO Contacts (ContactName, ContactPhone, UserID) VALUES (@Name, @Phone, @UserID)", con))
+                            {
+                                cmd.Parameters.AddWithValue("@Name", contactName);
+                                cmd.Parameters.AddWithValue("@Phone", contactPhone);
+                                cmd.Parameters.AddWithValue("@UserID", userId);
+                                con.Open();
+                                cmd.ExecuteNonQuery();
+                                con.Close();
+                            }
+                        }
+                    }
+                }
             }
         }
     }
